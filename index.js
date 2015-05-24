@@ -8,10 +8,23 @@ var bodyParser = require('body-parser');
 var sessions = require('client-sessions');
 var bcrypt = require('bcryptjs');
 
-var mongodb = require('mongojs');
-var db = mongodb('users',['users']);
+
+var mongoose = require('mongoose');
+mongoose.connect('mongodb://localhost/test');
 
 app.set('view engine','ejs');
+
+var Schema = mongoose.Schema;
+var ObjectId = Schema.ObjectId;
+
+
+//User Model
+var User = mongoose.model('User',new Schema({
+	id: ObjectId,
+	username: {type:String,unique:true},
+	password: {type:String}
+}));
+
 
 
 
@@ -42,39 +55,51 @@ app.get('/signup',function(request,response){
 });
 
 //Signup Route POST
-app.post('/signup',function(request,response){
+app.post('/signup',function(req,res){
 
-	var pass = bcrypt.hashSync(req.body.pasword,bcrupt.genSaltSync(10));
+	var pass = bcrypt.hashSync(req.body.password,bcrypt.genSaltSync(10));
 
-	db.users.insert({username : request.body.username, password : pass},function(err,user){
+	var user = new User({
+		username : req.body.username,
+		password: pass
+	});
+
+	user.save(function(err){
 		if(err){
-			response.render('signup',{error:'Something Went wrong Username is not created'});
+			if(err.code == 11000){
+			var errs = 'Username is being used';
+			res.render('signup',{error:errs});
+			}
+		}else
+		{
+			res.redirect('/chat');
 		}
-		response.redirect('chat');
+		
+
+		
+
 	});
 });
 
 //Login Route GET & POST
 app.get('/login',function(req,res){
 
-	res.render('login', {error:'asd'});
+	res.render('login');
 });
 
 app.post('/login',function(req,res){
 
-	db.users.findOne({username:req.body.username},function(err,user){
+	User.findOne({username:req.body.username},function(err,user){
 		
 		if(user){
 			if(bcrypt.compareSync(req.body.password,user.password)){
 				req.session.user = user;
 				res.redirect('/chat');
 			}
-			else{
-				res.render('login',{error : 'Password is incorrect'});
+			}else{
+				req.session.reset();
+				res.render('login');
 			}
-		}else{
-			res.render('login', {error : 'Username does not exist'});
-		}
 			
 	});
 	
@@ -86,7 +111,23 @@ app.post('/login',function(req,res){
 //Chat Route GET & POST
 app.get('/chat',function(req,res){
 
-	res.render('chat');
+	if(req.session && req.session.user){
+		User.findOne({username:req.session.user.username},function(err,user){
+			if(!user){
+				req.session.reset();
+				res.redirect('/login');
+			}else
+			{
+				User.findOne({username:'foo2'},function(err,user){
+					res.json(user);
+				})
+			}
+		});
+	}else{
+		res.redirect('/login');
+	}
+	
+	
 });
 
 app.post('/chat',function(req,res){
@@ -94,7 +135,14 @@ app.post('/chat',function(req,res){
 	//TODO chat module
 });
 
+app.get('/logout',function(req,res){
 
+	if(req.session && req.session.user){
+		req.session.reset();
+	}
+
+	res.redirect('/login');
+});
 
 //add listener
 var server = app.listen(3000,function(){
