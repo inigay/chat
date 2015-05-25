@@ -2,9 +2,171 @@
 
 <div class="container">
 
-	<div class="col_12">
-		Chat Here
+<div class="mainBody">
+	<div class="col-lg-3 col-md-3 col-sm-3 contactBox">
+		<div class="searchBox">
+			<input type="text" placeholder="search" id="contact" name="username" class="form-control">
+			<a href="#" class="btn btn-info btn-lg" id="search">
+   				<span class="glyphicon glyphicon-search"></span>
+  			</a>
+		</div>
+		<ul class="searched list-group">
+
+		</ul>
+		<ul class="contacts list-group">
+			<% for(var i = 0; i < user.contacts.length;i++){ %>
+
+				<li thread="<%= user.contacts[i].threadId %>" notifications="<%= user.contacts[i].notifications %>" class="list-group-item clickToChat" username="<%= user.contacts[i].contactName %>"><%= user.contacts[i].contactName %></li>
+			<% } %>
+		</ul>
 	</div>
 
+	<div class="col-lg-9 col-md-9 col-sm-9 chatBox">
+
+		<div class="chat">
+			<%= user.username %>
+		</div>
+		<div class="messageArea">
+			<input type="text" placeholder="message" id="message">
+			<input type="submit" id="sendMessage">
+		</div>
+	</div>	
+	<div class="clear"></div>
 </div>
+
+
+</div>
+<% include partials/page/script.ejs %>
+
+<script type="text/javascript" src="/socket.io/socket.io.js"></script>
+
+<script type="text/javascript">
+
+var userI = '<%= user.username %>';
+
+$('document').ready(function(){
+	var connect = io.connect();
+	var messageToSend = $('#message');
+	$(this).on('click','#sendMessage',function(){
+		//Hook
+		if(messageToSend.val().length > 0){
+
+			connect.emit('message',{username: $(this).attr('user'),message:$('#message').val()});
+			var ch = $('.chat .chatMsg').last();
+					if(ch.find('span').text() == $(this).attr('user')){
+						
+						var messageHtml = '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
+						messageHtml += '<span>' + + userI +  + '</span>';
+						messageHtml += '<p>' + $('#message').val() + '</p></div>';
+						$('.chat').append(messageHtml);
+					}else{
+						ch.append('<p>' + $('#message').val() + '</p>');
+					}
+			
+		}
+	});
+	
+	connect.on('status',function(data){
+		console.log(data);
+	});
+
+	connect.on('message',function(data){
+		console.log(data);
+		var contact = $('.clickToChat[thread="'+data.threadId+'"]');
+		console.log(contact);
+		var notifications = contact.attr('notifications');
+		if(notifications){
+			notifications++;
+			contact.addClass('newMessage');
+		}
+		else if(contact.hasClass('active')){
+			var ch = $('.chat .chatMsg').last();
+					if(ch.find('span').text() != data.username){
+						
+						var messageHtml = '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
+						messageHtml += '<span>' + data.username + '</span>';
+						messageHtml += '<p>' + data.message + '</p></div>';
+						$('.chat').append(messageHtml);
+					}else{
+						ch.append('<p>' + data.message + '</p>');
+					}
+			
+		}
+		else{
+			notifications = 1;
+			contact.addClass('newMessage');
+		}
+
+
+	});
+
+
+	$('#search').click(function(){
+		
+		$.get( "/chat/contacts", { username:$('#contact').val() },function(data){
+			if(data.found){
+				$('.searched').append('<li class="toAdd list-group-item">'+data.username+'<button type="button" class="btn btn-link addToContacts" user="'+data.username+'">Add</button></li>');
+			}
+		} );
+	});
+
+	$(this).on('click','.addToContacts',function(){
+		console.log("addTocontacts");
+		var user = $(this).attr('user');
+		$.post("/chat/contacts",{username : user},function(data){
+			if($('.clickToChat[username="'+data.username+'"]').attr('username') == data.username){
+				$('.searched').empty();
+			}else{
+				$('.contacts').append('<li thread="'+data.threadId+'" notifications="'+data.notifications+'" username="'+data.username+'" class="list-group-item clickToChat">'+data.username+'</li>');
+				$('.searched').empty();
+			}
+			
+		});
+	});
+
+	
+
+	$(this).on('click','.clickToChat',function(){
+		$('.clickToChat').removeClass('active');
+		$(this).addClass('active');
+		$('#sendMessage').attr('user', $(this).attr('username'));
+		$.get('/chat/thread?threadId='+$(this).attr('thread'),function(data){
+			
+			if(data.found){
+				$('.chat').empty();
+
+				var sender = data.messages[data.messages.length - 1].sender;
+
+				for(var i = data.messages.length -1;i > 0; i--){
+
+					var messageHtml = '';
+
+					var ch = $('.chat .chatMsg').first();
+					if(data.messages[i].sender != data.messages[i-1].sender){
+						messageHtml += '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
+						messageHtml += '<span>' + data.messages[i].sender + '</span>';
+						messageHtml += '<p>' + data.messages[i].message + '</p></div>';
+						$('.chat').prepend(messageHtml);
+					}else{
+						ch.prepend('<p>' + data.messages[i].message + '</p>');
+					}
+				}
+						if(data.messages[0].sender != data.messages[1].sender){
+						messageHtml += '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
+						messageHtml += '<span>' + data.messages[i].sender + '</span>';
+						messageHtml += '<p>' + data.messages[i].message + '</p></div>';
+						$('.chat').prepend(messageHtml);
+						}else{
+							ch.prepend('<p>' + data.messages[i].message + '</p>');
+						}
+			}
+		});
+	});
+
+
+});
+
+</script>
+
 <% include partials/page/footer.ejs %>
+
