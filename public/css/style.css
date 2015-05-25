@@ -120,6 +120,10 @@ border:0px;
 	background: #DBDBDB;
 }
 
+.clickToChat.active:hover,.clickToChat.active:active{
+	background:#DBDBDB;
+}
+
 .chatMsg p{padding-left:100px;}
 
 .chatMsg span{
@@ -127,4 +131,14 @@ border:0px;
   padding-left: 10px;
   font-size: 16px;
   font-weight: bold;
+}
+
+.clickToChat{
+	border-color:#337ab7;
+	font-size:15px;
+	text-transform: capitalize;
+	font-weight: bold;
+}
+.clickToChat.online{
+	border-color:#04dd00;
 }

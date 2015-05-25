@@ -29,8 +29,8 @@ var User = mongoose.model('User',new Schema({
 	password: {type:String},
 	contacts:[{
 		contactName:String,
-		notifications: Number,
-		threadId:ObjectId,
+		notifications: {type:Number,default:0},
+		threadId:ObjectId
 	}]
 }));
 
@@ -101,7 +101,7 @@ function sessionMid(req,res,next){
 
 function authenticate(req,res,next){
 	if(!req.user){
-		res.redirect('/login');	
+		res.redirect('/login');
 	}else
 	{
 		next();
@@ -322,23 +322,29 @@ app.get('/chat',authenticate,function(req,res){
 app.get('/chat/thread',authenticate,function(req,res){
 	
 	var threadId = '';
-	var slide = 0;
-	if(req.query.slide){
-		slide = req.query.slide;
-	}
+	
 	if(req.query.threadId){
 		threadId = req.query.threadId;
 	}else{
-		res.send(500);
+		
+		res.send(401);
+		res.end();
 	}
 
 	User.findOne({username:req.session.user.username},function(err,user){
 		if(user){
+			
 					Thread.findOne({_id:threadId},function(err,thread){
-						res.json({found:true, messages:thread.messages});
+
+						if(thread.messages.length > 0)
+							
+							res.json({found:true, messages:thread.messages.sort(compare)});
+							res.end();
+						
 					});
 		}else{
 			res.json({found:false});
+			res.end();
 		}
 		
 	});
@@ -347,13 +353,32 @@ app.get('/chat/thread',authenticate,function(req,res){
 });
 
 
+app.post('/chat/notifications',authenticate,function(req,res){
+
+	if(req.body.contactName){
+		User.findOne({username: req.session.user.username},function(err,user){
+			for(var i in user.contacts){
+				if(user.contacts[i].contactName == req.body.contactName){
+					user.contacts[i].notifications = 0;
+					user.save(function(err){
+						if(!err)
+							res.json({status:true,notifications:0});
+					});
+					
+				}
+			}
+			
+		});
+	}
+});
+
 //Chat Implementation
 io.sockets.on('connection',function(socket){
-	
+	console.log(socket.id);
 	if(socket.request.session && socket.request.session.user){
 		User.findOne({username:socket.request.session.user.username},function(err,user){
 			if(!user){
-				socket.disconnect();
+				
 			}else{
 				socket.username = user.username;
 				var tempSocket = new Socket({
@@ -393,17 +418,19 @@ io.sockets.on('connection',function(socket){
 									{safe:true,upsert:true},
 									function(err,thread){
 										Socket.findOne({username:data.username},function(err,s){
-											if(s){
-												if(typeof io.sockets.connected[s.socketId] === 'undefined'){
+
+											if(!s || err){
+												
+												
 													User.findOne({username:data.username},function(err,user){
 
 														if(user){
 
 															for(var i = 0; i < user.contacts.length;i++){
 																if(user.contacts[i].contactName == socket.username){
-
-																	user.contacts[i].notifications = 1;
-																	console.log(user.contacts[i].notifications);
+																	console.log('letting Know about NOtificaitons');
+																	user.contacts[i].notifications++;
+																	
 																	user.save(function(err){
 																		if(!err){
 																			console.log('gotcha');
@@ -414,11 +441,14 @@ io.sockets.on('connection',function(socket){
 															}
 														}
 													});
-												}else{
-													io.sockets.connected[s.socketId].emit('message',{threadId:thread._id,username: socket.request.session.user.username, message:data.message});
-												}
 												
-											}
+												
+											}else{
+													if(typeof io.sockets.connected[s.socketId] !== 'undefined'){
+															io.sockets.connected[s.socketId].emit('message',{threadId:thread._id,username: socket.request.session.user.username, message:data.message});
+													}
+													
+												}
 											
 										});
 									}
@@ -437,8 +467,15 @@ io.sockets.on('connection',function(socket){
 	});
 
 	socket.on('disconnect',function(){
-		Socket.find({socketId:socket.id}).remove().exec();
-		io.sockets.emit('status',{username: socket.username,status:false})
+		console.log('global disconnect');
+		Socket.find({socketId:socket.id}).remove(function(err,socket){
+			if(socket && !err)
+			{
+				console.log('removed');
+				io.sockets.emit('status',{username: socket.username,status:false});
+			}
+		})
+		
 	});
 });
 

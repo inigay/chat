@@ -24,7 +24,7 @@
 	<div class="col-lg-9 col-md-9 col-sm-9 chatBox">
 
 		<div class="chat">
-			<%= user.username %>
+			
 		</div>
 		<div class="messageArea">
 			<input type="text" placeholder="message" id="message">
@@ -44,44 +44,66 @@
 
 var userI = '<%= user.username %>';
 
+function checkNotifications(){
+	$('.clickToChat').each(function(){
+		var notifications = $(this).attr('notifications');
+		if(notifications > 0){
+			$(this).append('<span class="notifications">' + notifications + '</span>');
+		}
+	});
+}
+
 $('document').ready(function(){
+
+	checkNotifications();
+
 	var connect = io.connect();
 	var messageToSend = $('#message');
 	$(this).on('click','#sendMessage',function(){
-		//Hook
+
+		
 		if(messageToSend.val().length > 0){
 
-			connect.emit('message',{username: $(this).attr('user'),message:$('#message').val()});
+			connect.emit('message',{username: $(this).attr('user'),message:$('#message').val(),threadId:$(this).attr('threadId')});
 			var ch = $('.chat .chatMsg').last();
 					if(ch.find('span').text() == $(this).attr('user')){
 						
 						var messageHtml = '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
-						messageHtml += '<span>' + + userI +  + '</span>';
+						messageHtml += '<span>' +  userI  + '</span>';
 						messageHtml += '<p>' + $('#message').val() + '</p></div>';
 						$('.chat').append(messageHtml);
 					}else{
 						ch.append('<p>' + $('#message').val() + '</p>');
 					}
-			
+			$('#message').val('');
 		}
 	});
 	
 	connect.on('status',function(data){
-		console.log(data);
+		$('.clickToChat').each(function(){
+			console.log($(this));
+			if($(this).attr('username') == data.username){
+				if(data.status){
+					$(this).addClass('online');
+				}else{
+					$(this).removeClass('online');
+				}
+			}
+		});
 	});
 
 	connect.on('message',function(data){
 		console.log(data);
 		var contact = $('.clickToChat[thread="'+data.threadId+'"]');
-		console.log(contact);
+		//console.log(contact);
 		var notifications = contact.attr('notifications');
 		if(notifications){
-			notifications++;
 			contact.addClass('newMessage');
 		}
-		else if(contact.hasClass('active')){
+		if(contact.hasClass('active')){
 			var ch = $('.chat .chatMsg').last();
-					if(ch.find('span').text() != data.username){
+
+					if(ch.children('span').text() != data.username){
 						
 						var messageHtml = '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
 						messageHtml += '<span>' + data.username + '</span>';
@@ -92,10 +114,7 @@ $('document').ready(function(){
 					}
 			
 		}
-		else{
-			notifications = 1;
-			contact.addClass('newMessage');
-		}
+		
 
 
 	});
@@ -127,15 +146,22 @@ $('document').ready(function(){
 	
 
 	$(this).on('click','.clickToChat',function(){
+		$.post('/chat/notifications',{contactName: $(this).attr('username')},function(data){
+			if(data.status){
+				$(this).attr('notifications','');
+				$(this).children('span.notifications').remove();
+			}
+		});
 		$('.clickToChat').removeClass('active');
 		$(this).addClass('active');
 		$('#sendMessage').attr('user', $(this).attr('username'));
+		$('#sendMessage').attr('threadId',$(this).attr('threadId'));
 		$.get('/chat/thread?threadId='+$(this).attr('thread'),function(data){
 			
 			if(data.found){
 				$('.chat').empty();
 
-				var sender = data.messages[data.messages.length - 1].sender;
+				var sender = data.messages[data.messages.length - 1].username;
 
 				for(var i = data.messages.length -1;i > 0; i--){
 
@@ -151,9 +177,9 @@ $('document').ready(function(){
 						ch.prepend('<p>' + data.messages[i].message + '</p>');
 					}
 				}
-						if(data.messages[0].sender != data.messages[1].sender){
+						if(data.messages[0].username != data.messages[1].username){
 						messageHtml += '<div class="chatMsg"><img src="/avatar.png" class="img-circle" alt="Circular Image">';
-						messageHtml += '<span>' + data.messages[i].sender + '</span>';
+						messageHtml += '<span>' + data.messages[i].username + '</span>';
 						messageHtml += '<p>' + data.messages[i].message + '</p></div>';
 						$('.chat').prepend(messageHtml);
 						}else{
